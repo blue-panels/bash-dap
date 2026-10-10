@@ -4,7 +4,8 @@ A debug adapter of the [Debug Adapter Protocol](https://microsoft.github.io/debu
 for bash scripts: breakpoints, steps into, over and out of functions, the call stack, the
 variables (arrays and associative arrays as trees), expressions, pause.
 
-It needs nothing but bash and Python 3: no bashdb, no Node.js.  The debugger itself is a script
+It needs nothing but bash 4.1 or newer and Python 3.8 or newer: no bashdb, no Node.js.  (The bash
+of macOS is 3.2: a newer one, from Homebrew say, is given to the launch as *bash*.)  The debugger itself is a script
 of bash, `harness.sh`, which the adapter runs the script under; it stops the script with the
 trap DEBUG, in the subshells of `$(...)` and of pipes too.
 

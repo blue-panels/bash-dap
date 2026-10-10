@@ -10,6 +10,7 @@ readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
 authors = [{ name = "Ilia Maslakov", email = "il.smind@gmail.com" }]
 requires-python = ">=3.8"
+keywords = ["bash", "debugger", "dap", "debug-adapter-protocol"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Unix Shell",
@@ -24,3 +25,7 @@ packages = ["bash_dap"]
 
 [tool.setuptools.package-data]
 bash_dap = ["harness.sh"]
+
+[project.urls]
+Homepage = "https://github.com/blue-panels/bash-dap"
+Issues = "https://github.com/blue-panels/bash-dap/issues"
