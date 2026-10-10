@@ -40,7 +40,7 @@ __bdap_inside=
 __bdap_prev=  # the place of the command before: a line stops when it is come to, not again
 
 # the variables of bash itself, and those it makes for a function: not shown
-__bdap_known=" $(compgen -v | tr '\n' ' ') FUNCNAME BASH_ARGC BASH_ARGV BASH_LINENO BASH_SOURCE "
+__bdap_known=" $(compgen -v | tr '\n' ' ') FUNCNAME BASH_ARGC BASH_ARGV BASH_LINENO BASH_SOURCE COLUMNS LINES "
 
 __bdap_say () {
     printf '%s\n' "$*" >&"$__bdap_out"
