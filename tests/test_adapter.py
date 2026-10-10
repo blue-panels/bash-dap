@@ -223,6 +223,27 @@ class SessionTest(unittest.TestCase):
         c.request("continue", {"threadId": 1})
         self.assertEqual(c.wait_event("exited")["body"]["exitCode"], 3)
 
+    def test_conditional_breakpoint(self):
+        c = self.client = Client()
+        c.request("initialize", {"adapterID": "bash-dap", "linesStartAt1": True})
+        c.request("launch", {"program": script("backup.sh"), "cwd": SCRIPTS})
+        c.wait_event("initialized")
+        response = c.request("setBreakpoints", {"source": {"path": script("backup.sh")},
+                                                "breakpoints": [
+            {"line": 15, "condition": "[[ $f == photo.jpg ]]"},
+            # an assignment in a condition changes nothing of the script
+            {"line": 16, "condition": "total=1000; false"}]})
+        self.assertTrue(all(b["verified"] for b in response["body"]["breakpoints"]))
+        c.request("configurationDone")
+        self.assertEqual(c.wait_event("stopped")["body"]["reason"], "breakpoint")
+        self.assertEqual(c.stop_place(), [("main", "backup.sh", 15)])
+        self.assertEqual(c.evaluate("$f")["body"]["result"], "photo.jpg")
+        self.assertEqual(c.evaluate("$total")["body"]["result"], "900")
+        # no other round stops, and the total is the script's own
+        c.request("continue", {"threadId": 1})
+        self.assertEqual(c.wait_event("exited")["body"]["exitCode"], 3)
+        self.assertIn("3 files, 2800 bytes", c.output())
+
     def test_pipe_sourced_file_and_dollar_zero(self):
         c = self.client = Client()
         c.start(script("pipe.sh"), [(script("lib.sh"), 3), (script("pipe.sh"), 6)])

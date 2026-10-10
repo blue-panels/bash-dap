@@ -17,7 +17,9 @@
 # the script is stopped.  At any time the adapter may write the breakpoints to the file "breaks",
 # FILE:LINE a line, then make the empty file "gen.N" of the next generation N; and stop the
 # script at its next command by writing "step 0" to the file "state".  A line NAME() of
-# "breaks" is a breakpoint on the function NAME: the script stops at its first command.
+# "breaks" is a breakpoint on the function NAME: the script stops at its first command.  After
+# FILE:LINE and a tab, a command of bash is the condition of the breakpoint: the script stops
+# there only when its status is 0.
 #
 # A subshell is a process of its own: what it is told, a step, a breakpoint, goes to the others
 # through these files.  The names of the debugger begin with __bdap_.
@@ -35,8 +37,8 @@ __bdap_mode=run
 __bdap_depth=0
 # the breakpoints by FILE:LINE, and the generation of the file they came from; __bdap_names has
 # NAME:LINE, the name of the file only, that the trap tests at each command; __bdap_funcs has
-# NAME() of the functions to stop in
-declare -A __bdap_breaks=() __bdap_names=() __bdap_funcs=()
+# NAME() of the functions to stop in; __bdap_conds the conditions of FILE:LINE
+declare -A __bdap_breaks=() __bdap_names=() __bdap_funcs=() __bdap_conds=()
 __bdap_gen=0
 __bdap_inside=
 __bdap_prev=  # the place of the command before: a line stops when it is come to, not again
@@ -98,8 +100,13 @@ __bdap_breaks_load () {
     __bdap_breaks=()
     __bdap_names=()
     __bdap_funcs=()
-    while read -r __bdap_place; do
+    __bdap_conds=()
+    while IFS= read -r __bdap_place; do
         [[ -z $__bdap_place ]] && continue
+        if [[ $__bdap_place == *$'\t'* ]]; then
+            __bdap_conds["${__bdap_place%%$'\t'*}"]=${__bdap_place#*$'\t'}
+            __bdap_place=${__bdap_place%%$'\t'*}
+        fi
         if [[ $__bdap_place == *"()" ]]; then
             __bdap_funcs["$__bdap_place"]=1
             continue
@@ -148,6 +155,13 @@ __bdap_on_line () {
     [[ -z $__bdap_word || ${__bdap_text[0]-} == *"$__bdap_word"* ]]
 }
 
+# Whether the condition of a breakpoint holds, none always: run in a subshell, it sees the
+# variables of the script and changes none of them
+__bdap_condition () {
+    [[ -z $1 ]] && return 0
+    ( eval "$1" ) </dev/null >/dev/null 2>&1
+}
+
 # Before a command of the script that may stop: what the script has set, -e, -u, -x, is not
 # the debugger's, which runs without
 __bdap_hook () {
@@ -179,7 +193,8 @@ __bdap_check () {
     next) ((__bdap_d <= __bdap_depth)) && __bdap_reason=step ;;
     finish) ((__bdap_d < __bdap_depth)) && __bdap_reason=step ;;
     esac
-    if [[ -z $__bdap_reason && -n ${__bdap_breaks["$__bdap_file:$__bdap_line"]-} ]] && __bdap_on_line; then
+    if [[ -z $__bdap_reason && -n ${__bdap_breaks["$__bdap_file:$__bdap_line"]-} ]] && __bdap_on_line \
+        && __bdap_condition "${__bdap_conds["$__bdap_file:$__bdap_line"]-}"; then
         __bdap_reason=breakpoint
     fi
     # the first command of a function to stop in: the calls are deeper than at the command

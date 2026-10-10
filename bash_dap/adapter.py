@@ -199,8 +199,11 @@ class Adapter:
             return
         with open(os.path.join(self.dir, "breaks"), "w") as f:
             for path, lines in self.breaks.items():
-                for line in lines:
-                    f.write("%s:%d\n" % (path, line))
+                for line, condition in lines:
+                    if condition:
+                        f.write("%s:%d\t%s\n" % (path, line, condition))
+                    else:
+                        f.write("%s:%d\n" % (path, line))
             for name in self.functions:
                 f.write("%s()\n" % name)
         self.gen += 1
@@ -297,6 +300,7 @@ class Adapter:
         self.respond(request, {
             "supportsConfigurationDoneRequest": True,
             "supportsFunctionBreakpoints": True,
+            "supportsConditionalBreakpoints": True,
             "supportsEvaluateForHovers": True,
             "supportsTerminateRequest": True,
         })
@@ -355,12 +359,14 @@ class Adapter:
     def on_setBreakpoints(self, request):
         args = request.get("arguments", {})
         path = os.path.realpath(args.get("source", {}).get("path", ""))
-        lines = [b["line"] for b in args.get("breakpoints", []) if "line" in b]
+        # a line and its condition, a command of bash whose status says whether to stop
+        lines = [(b["line"], " ".join(b.get("condition", "").split()))
+                 for b in args.get("breakpoints", []) if "line" in b]
         self.breaks[path] = lines
         self.save_breaks()
         self.respond(request, {"breakpoints": [
             {"id": i + 1, "verified": True, "line": line, "source": {"path": path}}
-            for i, line in enumerate(lines)]})
+            for i, (line, _) in enumerate(lines)]})
 
     def on_setFunctionBreakpoints(self, request):
         """The functions to stop in at their first command; a name that is no name of a

@@ -1,9 +1,9 @@
 # bash-dap
 
 A debug adapter of the [Debug Adapter Protocol](https://microsoft.github.io/debug-adapter-protocol/)
-for bash scripts: breakpoints on lines and on functions, steps into, over and out of functions,
-the call stack, the
-variables (arrays and associative arrays as trees), expressions, pause.
+for bash scripts: breakpoints on lines, with conditions, and on functions, steps into, over and
+out of functions, the call stack, the variables (arrays and associative arrays as trees),
+expressions, pause.
 
 It needs nothing but bash 4.1 or newer and Python 3.8 or newer: no bashdb, no Node.js.  (The bash
 of macOS is 3.2: a newer one, from Homebrew say, is given to the launch as *bash*.)  The debugger itself is a script
@@ -63,12 +63,16 @@ A breakpoint on a function stops at its first command, at each call, in a subshe
 what the script defines later, or a file it sources, is found as well, as the name is all
 the debugger looks for.
 
+The condition of a breakpoint is a command of bash, `[[ $f == report.pdf ]]` or
+`(( count > 2 ))`: the script stops there when its status is 0.  It runs in a subshell, so it
+sees the variables of the script and changes none of them.
+
 When the session ends the adapter ends the script by its process group, the session it has to
 itself; never by a parent, never anything else.
 
 ## Not yet
 
-Conditional breakpoints, a script that another script runs with a new bash.
+A script that another script runs with a new bash.
 
 ## License
 
