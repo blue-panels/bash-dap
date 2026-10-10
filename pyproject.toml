@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bash-dap"
-version = "0.2"
+version = "0.3"
 description = "A debug adapter (Debug Adapter Protocol) for bash scripts, written in bash and Python"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
