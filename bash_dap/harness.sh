@@ -9,14 +9,15 @@
 # "replies", which it reads what the debugger says from, a line each:
 #
 #   commands:  run | step | next | finish | print EXPRESSION | vars | stack
-#   replies:   stopped REASON LINE FUNCTION FILE      (REASON: entry, breakpoint, step)
+#   replies:   stopped REASON LINE FUNCTION FILE      (REASON: entry, breakpoint, function, step)
 #              value TEXT | var NAME TEXT | frame LEVEL FUNCTION LINE FILE | error TEXT
 #              done, after the reply to a command | exited CODE
 #
 # TEXT is quoted as printf %q does, so that a reply is one line.  A command is read only while
 # the script is stopped.  At any time the adapter may write the breakpoints to the file "breaks",
 # FILE:LINE a line, then make the empty file "gen.N" of the next generation N; and stop the
-# script at its next command by writing "step 0" to the file "state".
+# script at its next command by writing "step 0" to the file "state".  A line NAME() of
+# "breaks" is a breakpoint on the function NAME: the script stops at its first command.
 #
 # A subshell is a process of its own: what it is told, a step, a breakpoint, goes to the others
 # through these files.  The names of the debugger begin with __bdap_.
@@ -33,11 +34,14 @@ __bdap_state=$__bdap_dir/state
 __bdap_mode=run
 __bdap_depth=0
 # the breakpoints by FILE:LINE, and the generation of the file they came from; __bdap_names has
-# NAME:LINE, the name of the file only, that the trap tests at each command
-declare -A __bdap_breaks=() __bdap_names=()
+# NAME:LINE, the name of the file only, that the trap tests at each command; __bdap_funcs has
+# NAME() of the functions to stop in
+declare -A __bdap_breaks=() __bdap_names=() __bdap_funcs=()
 __bdap_gen=0
 __bdap_inside=
 __bdap_prev=  # the place of the command before: a line stops when it is come to, not again
+__bdap_fdepth=0  # the depth of the calls at the command before: more is a function entered
+__bdap_fenter=  # a function to stop in is entered: its first command is next
 
 # the variables of bash itself, and those it makes for a function: not shown
 __bdap_known=" $(compgen -v | tr '\n' ' ') FUNCNAME BASH_ARGC BASH_ARGV BASH_LINENO BASH_SOURCE COLUMNS LINES "
@@ -93,8 +97,13 @@ __bdap_breaks_load () {
     done
     __bdap_breaks=()
     __bdap_names=()
+    __bdap_funcs=()
     while read -r __bdap_place; do
         [[ -z $__bdap_place ]] && continue
+        if [[ $__bdap_place == *"()" ]]; then
+            __bdap_funcs["$__bdap_place"]=1
+            continue
+        fi
         __bdap_breaks["$__bdap_place"]=1
         __bdap_names["${__bdap_place##*/}"]=1
     done <"$__bdap_dir/breaks"
@@ -126,6 +135,7 @@ __bdap_wait () {
     __bdap_resume run 0
     __bdap_breaks=()
     __bdap_names=()
+    __bdap_funcs=()
     trap - DEBUG
 }
 
@@ -172,6 +182,16 @@ __bdap_check () {
     if [[ -z $__bdap_reason && -n ${__bdap_breaks["$__bdap_file:$__bdap_line"]-} ]] && __bdap_on_line; then
         __bdap_reason=breakpoint
     fi
+    # the first command of a function to stop in: the calls are deeper than at the command
+    # before; bash comes first to the line that defines it, with the call as the command
+    if [[ -z $__bdap_reason && -n ${__bdap_funcs["${FUNCNAME[2]-}()"]-} ]]; then
+        if ((__bdap_d - 1 > __bdap_fdepth)) && [[ $__bdap_command == "${FUNCNAME[2]}"* ]]; then
+            __bdap_fenter=1
+        elif ((__bdap_d - 1 > __bdap_fdepth)) || [[ -n $__bdap_fenter ]]; then
+            __bdap_reason=function
+        fi
+    fi
+    [[ -n $__bdap_reason ]] && __bdap_fenter=
     # the next command of a line is no new place to stop at
     [[ -z $__bdap_reason || $__bdap_prev == "$__bdap_line:${BASH_SOURCE[2]}" ]] && return 0
     # the lines of the frames, the one stopped in first
@@ -195,12 +215,14 @@ trap '__bdap_say "exited $?"' EXIT
 shopt -s extdebug
 set -o functrace
 # the hook only when there may be something to do: a step, a breakpoint in a file of that name
-# on the line, what another process has said; else a command costs a test of two files.  One
-# line: a second one would have LINENO one more
-# (with set -u of the script it runs too: nothing unset is read, BASH_SOURCE is empty at the end)
+# on the line or on the function, what another process has said; else a command costs a test
+# of two files.  One line: a second one would have LINENO one more
+# (with set -u of the script it runs too: nothing unset is read, BASH_SOURCE is empty at the end,
+# FUNCNAME unset out of any function)
 __bdap_trap='[[ -n $__bdap_inside || ( $__bdap_mode == run'
 __bdap_trap+=' && -z ${__bdap_names["${BASH_SOURCE[0]:+${BASH_SOURCE[0]##*/}}:$LINENO"]-}'
+__bdap_trap+=' && -z ${__bdap_funcs["${FUNCNAME[0]-}()"]-}'
 __bdap_trap+=' && ! -e $__bdap_state && ! -e $__bdap_dir/gen.$((__bdap_gen + 1)) ) ]] || __bdap_hook "$BASH_COMMAND";'
-__bdap_trap+=' __bdap_prev=$LINENO:${BASH_SOURCE[0]-}'
+__bdap_trap+=' __bdap_prev=$LINENO:${BASH_SOURCE[0]-} __bdap_fdepth=${FUNCNAME[0]+${#FUNCNAME[@]}}'
 trap "$__bdap_trap" DEBUG
 . "$0" "$@"

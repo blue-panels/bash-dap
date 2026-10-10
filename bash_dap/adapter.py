@@ -16,6 +16,8 @@ import threading
 import time
 
 HARNESS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "harness.sh")
+# a name of a function of bash, as a breakpoint takes it: no space, no quote, no parenthesis
+FUNCTION_NAME = re.compile(r"^[^\s()$`'\"\\]+$")
 VARIABLES_REF = 1  # the reference of the variables of a stop
 
 
@@ -108,6 +110,7 @@ class Adapter:
         self.alive = False
         self.pause_asked = False
         self.breaks = {}
+        self.functions = []
         self.gen = 0
         self.refs = {}
         self.next_ref = VARIABLES_REF + 1
@@ -196,6 +199,8 @@ class Adapter:
             for path, lines in self.breaks.items():
                 for line in lines:
                     f.write("%s:%d\n" % (path, line))
+            for name in self.functions:
+                f.write("%s()\n" % name)
         self.gen += 1
         open(os.path.join(self.dir, "gen.%d" % self.gen), "w").close()
 
@@ -255,6 +260,8 @@ class Adapter:
             return
         if self.pause_asked and reason == "step":
             reason = "pause"
+        elif reason == "function":
+            reason = "function breakpoint"
         self.pause_asked = False
         self.event("stopped", {"reason": reason, "threadId": 1, "allThreadsStopped": True})
 
@@ -287,6 +294,7 @@ class Adapter:
         self.client = request.get("arguments", {})
         self.respond(request, {
             "supportsConfigurationDoneRequest": True,
+            "supportsFunctionBreakpoints": True,
             "supportsEvaluateForHovers": True,
             "supportsTerminateRequest": True,
         })
@@ -353,9 +361,20 @@ class Adapter:
             for i, line in enumerate(lines)]})
 
     def on_setFunctionBreakpoints(self, request):
-        self.respond(request, {"breakpoints": [
-            {"verified": False, "message": "bash-dap has breakpoints on lines only"}
-            for _ in request.get("arguments", {}).get("breakpoints", [])]})
+        """The functions to stop in at their first command; a name that is no name of a
+        function of bash is not taken"""
+        answers = []
+        self.functions = []
+        for b in request.get("arguments", {}).get("breakpoints", []):
+            name = b.get("name", "")
+            if FUNCTION_NAME.match(name):
+                self.functions.append(name)
+                answers.append({"id": 1000 + len(self.functions), "verified": True})
+            else:
+                answers.append({"verified": False,
+                                "message": "no name of a function of bash: %s" % name})
+        self.save_breaks()
+        self.respond(request, {"breakpoints": answers})
 
     def on_setExceptionBreakpoints(self, request):
         self.respond(request, {"breakpoints": []})

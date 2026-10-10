@@ -198,6 +198,31 @@ class SessionTest(unittest.TestCase):
         c.wait_event("terminated")
         self.assertIn("3 files, 2800 bytes", c.output())
 
+    def test_function_breakpoints(self):
+        c = self.client = Client()
+        c.request("initialize", {"adapterID": "bash-dap", "linesStartAt1": True})
+        c.request("launch", {"program": script("backup.sh"), "cwd": SCRIPTS})
+        c.wait_event("initialized")
+        response = c.request("setFunctionBreakpoints", {"breakpoints": [
+            {"name": "size_of"}, {"name": "not a name"}]})
+        verified = [b["verified"] for b in response["body"]["breakpoints"]]
+        self.assertEqual(verified, [True, False])
+        c.request("configurationDone")
+        # at the first command of the function, in the subshell of $(...)
+        self.assertEqual(c.wait_event("stopped")["body"]["reason"], "function breakpoint")
+        self.assertEqual(c.stop_place(), [("size_of", "backup.sh", 7), ("main", "backup.sh", 15)])
+        # once a call, not at each of its commands
+        c.request("next", {"threadId": 1})
+        c.wait_event("stopped")
+        self.assertEqual(c.stop_place()[0], ("size_of", "backup.sh", 8))
+        c.request("continue", {"threadId": 1})
+        c.wait_event("stopped")
+        self.assertEqual(c.evaluate("$f")["body"]["result"], "photo.jpg")
+        # taken off, the script runs to its end
+        c.request("setFunctionBreakpoints", {"breakpoints": []})
+        c.request("continue", {"threadId": 1})
+        self.assertEqual(c.wait_event("exited")["body"]["exitCode"], 3)
+
     def test_pipe_sourced_file_and_dollar_zero(self):
         c = self.client = Client()
         c.start(script("pipe.sh"), [(script("lib.sh"), 3), (script("pipe.sh"), 6)])
