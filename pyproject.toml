@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bash-dap"
+version = "0.1"
+description = "A debug adapter (Debug Adapter Protocol) for bash scripts, written in bash and Python"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Ilia Maslakov", email = "il.smind@gmail.com" }]
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Unix Shell",
+    "Topic :: Software Development :: Debuggers",
+]
+
+[project.scripts]
+bash-dap = "bash_dap.adapter:main"
+
+[tool.setuptools]
+packages = ["bash_dap"]
+
+[tool.setuptools.package-data]
+bash_dap = ["harness.sh"]
