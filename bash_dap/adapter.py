@@ -15,6 +15,8 @@ import tempfile
 import threading
 import time
 
+from . import __version__
+
 HARNESS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "harness.sh")
 # a name of a function of bash, as a breakpoint takes it: no space, no quote, no parenthesis
 FUNCTION_NAME = re.compile(r"^[^\s()$`'\"\\]+$")
@@ -546,7 +548,7 @@ def main():
               "on stdin and stdout")
         return 0
     if len(sys.argv) > 1 and sys.argv[1] == "--version":
-        print("bash-dap 0.1")
+        print("bash-dap %s" % __version__)
         return 0
     Adapter(sys.stdin.buffer, sys.stdout.buffer).run()
     return 0
